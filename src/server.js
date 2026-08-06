@@ -69,7 +69,7 @@ app.post('/api/link', auth, (req, res) => {
   res.json({ referralLink: `${HOST}/go/${req.user.promoCode}`, destination: req.user.destination });
 });
 
-// 专属链接跳转：记录点击 + 种 subID cookie + 302 到商家
+// 专属链接跳转：记录点击 + 种 subID cookie + 302 到注册页并带 ref=推广码
 app.get('/go/:promoCode', (req, res) => {
   const code = req.params.promoCode;
   const user = Object.values(db.state.users).find(u => u.promoCode === code);
@@ -78,7 +78,21 @@ app.get('/go/:promoCode', (req, res) => {
   db.save();
   res.cookie('sb_subid', code, { maxAge: 30 * 24 * 3600 * 1000, httpOnly: true });
   const dest = user.destination || 'https://www.snowballwise.com';
-  res.redirect(dest);
+  const sep = dest.includes('?') ? '&' : '?';
+  // 带 ref=推广码 跳转到注册页，让对方注册时自动成为该用户的一级
+  res.redirect(`${dest}${sep}ref=${code}`);
+});
+
+// 商品点击追踪（前端 deals 页带 promoCode 上报，用于归属"谁点了什么"）
+app.post('/api/track', (req, res) => {
+  const { promoCode, sku, name } = req.body || {};
+  if (!promoCode) return res.status(400).json({ error: '缺 promoCode' });
+  db.state.clicks.push({
+    promoCode, sku: sku || '', name: name || '',
+    typed: 'product', ts: new Date().toISOString(), ip: req.ip
+  });
+  db.save();
+  res.json({ ok: true });
 });
 
 // 联盟报表 CSV 导入（MVP 用 Bearer token 鉴权，后续换管理员角色）
@@ -141,6 +155,15 @@ app.get('/api/admin/export', adminAuth, (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', 'attachment; filename="snowballwise-export.json"');
   res.send(JSON.stringify(db.state, null, 2));
+});
+
+// 管理员导入联盟订单报表（CSV：promo_code,order_amount,commission,source）
+app.post('/api/admin/orders/import', adminAuth, (req, res) => {
+  try {
+    const text = (req.body && req.body.csv) || '';
+    const result = importCsv(text);
+    res.json({ ...result, totalOrders: db.state.orders.length });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 function publicUser(u, req) {

@@ -45,9 +45,21 @@
       <div class="bar">
         <div style="font-size:14px;font-weight:600">实时数据</div>
         <div>
+          <button onclick="toggleImport()">导入订单 CSV</button>
           <button onclick="load()">刷新</button>
           <button onclick="exportJson()">导出备份 JSON</button>
           <button onclick="logout()">退出</button>
+        </div>
+      </div>
+      <div id="import-box" style="display:none;background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px">
+        <div style="font-size:13px;color:var(--ink-600);line-height:1.7;margin-bottom:10px">
+          从京东联盟 / 淘宝联盟后台导出订单报表，整理成 CSV 粘贴到下面。<br/>
+          表头必须是：<code>promo_code,order_amount,commission,source</code>（source 可填 jd / taobao / 渠道名）
+        </div>
+        <textarea id="csv" rows="6" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13px;font-family:monospace"></textarea>
+        <div style="margin-top:10px">
+          <button onclick="importCsv()">导入并分账</button>
+          <span id="import-msg" style="font-size:13px;margin-left:12px"></span>
         </div>
       </div>
       <div class="stats" id="stats"></div>
@@ -98,6 +110,29 @@
     function exportJson(){
       const t = getToken();
       window.open(API + '/api/admin/export?token=' + encodeURIComponent(t), '_blank');
+    }
+    function toggleImport(){
+      const box = document.getElementById('import-box');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+    async function importCsv(){
+      const t = getToken();
+      const csv = document.getElementById('csv').value.trim();
+      const msg = document.getElementById('import-msg');
+      if(!csv){ msg.style.color='#b91c1c'; msg.textContent='请先粘贴 CSV'; return; }
+      msg.style.color='#64748b'; msg.textContent='导入中…';
+      try{
+        const r = await fetch(API + '/api/admin/orders/import', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'x-admin-token': t },
+          body: JSON.stringify({ csv })
+        });
+        const data = await r.json();
+        if(!r.ok){ msg.style.color='#b91c1c'; msg.textContent='失败：'+(data.error||r.status); return; }
+        msg.style.color='#047857';
+        msg.textContent='成功导入 '+data.imported+' 条，忽略 '+(data.errors?data.errors.length:0)+' 条（点刷新看账本）';
+        load();
+      }catch(e){ msg.style.color='#b91c1c'; msg.textContent='网络错误：'+e.message; }
     }
     function logout(){ localStorage.removeItem('sb_admin'); location.reload(); }
 
