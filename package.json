@@ -1,0 +1,15 @@
+{
+  "name": "snowballwise-opc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "snowballwise 宝妈 OPC 系统 MVP：用户/两级分佣/返现账本/联盟报表导入（零原生依赖，可迁 Supabase）",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2"
+  }
+}

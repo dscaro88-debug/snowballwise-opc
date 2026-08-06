@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>宝妈如何用 snowballwise 赚返现</title>
+<style>
+  :root{ --ink:#1c1c1a; --muted:#6b6b66; --line:#e3e1da; --teal:#0F6E56; --amber:#854F0B; --purple:#534AB7; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:#fafaf8;line-height:1.6}
+  .wrap{max-width:760px;margin:0 auto;padding:48px 20px 80px}
+  h1{font-size:24px;font-weight:600;margin:0 0 8px}
+  h2{font-size:17px;font-weight:600;margin:40px 0 12px}
+  p{color:#33332f;margin:8px 0}
+  .lead{color:var(--muted);font-size:15px}
+  .step{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+  .num{flex:0 0 28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  input{flex:1;min-width:160px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+  button{background:var(--teal);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer}
+  button.ghost{background:#fff;color:var(--teal);border:1px solid var(--teal)}
+  code{background:#f0eee8;padding:2px 6px;border-radius:6px;font-size:13px}
+  .ok{color:var(--teal);font-size:14px;margin-top:10px}
+  .chain span{padding:4px 10px;border-radius:999px;font-size:13px;color:#fff;margin:0 4px}
+  .b{background:var(--teal)} .l1{background:var(--purple)} .l2{background:var(--amber)}
+  .note{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>宝妈如何用 snowballwise 赚返现</h1>
+  <p class="lead">你本来就要买母婴 / 日用品。通过 snowballwise 买 = 同样的钱拿回一部分返现；把链接分享给朋友，朋友也省，你再多赚一层。零成本、零风险。</p>
+
+  <h2>四步跑通</h2>
+  <div class="step"><div class="num">1</div><div><b>注册</b><br><span class="note">用邮箱注册，系统给你一个专属推广码（promo code）。</span></div></div>
+  <div class="step"><div class="num">2</div><div><b>拿专属链接</b><br><span class="note">你的链接长这样：<code>/go/你的推广码</code>。朋友点它去商城下单，系统用推广码记录归属。</span></div></div>
+  <div class="step"><div class="num">3</div><div><b>两级返现</b><br><span class="note">朋友（一级）下单你拿一级分佣；朋友推荐的朋友（二级）下单你拿二级分佣。三级及以上不发（红线）。</span></div></div>
+  <div class="step"><div class="num">4</div><div><b>提现</b><br><span class="note">余额累计到阈值，微信转账给你（商户号跑通后自动提现）。</span></div></div>
+
+  <div class="card">
+    <b>分佣结构（占联盟佣金比例）</b>
+    <p class="chain"><span class="b">自购返现 50%</span><span class="l1">一级 30%</span><span class="l2">二级 10%</span><span style="background:#5F5E5A">平台 10%</span></p>
+    <p class="note">例子：朋友海淘 ¥300 保健品，联盟佣金 15% = ¥45。你拿一级 ¥13.5，朋友拿自购返现 ¥22.5，平台留 ¥4.5。</p>
+  </div>
+
+  <h2>体验一下（本地 MVP）</h2>
+  <div class="card">
+    <p class="note">注册后会返回你的推广码和专属链接。</p>
+    <div class="row">
+      <input id="email" placeholder="邮箱" />
+      <input id="pwd" placeholder="密码" type="password" />
+      <input id="ref" placeholder="推荐码（可选）" />
+      <button onclick="doReg()">注册</button>
+    </div>
+    <div class="row">
+      <input id="dest" placeholder="你的联盟推广链接（如淘宝/京东/CJ）" />
+      <button class="ghost" onclick="setLink()">生成专属链接</button>
+    </div>
+    <div id="out" class="ok"></div>
+  </div>
+
+  <p class="note">这是阶段二系统 MVP 演示页。生产版用户系统用 Supabase，联盟数据自动回传，提现接微信/支付宝商户号。</p>
+</div>
+
+<script>
+let TOKEN = '';
+async function doReg(){
+  const body = { email:email.value, password:pwd.value, referrerCode:ref.value||undefined };
+  const r = await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j = await r.json();
+  if(j.error){ out.textContent='错误：'+j.error; return; }
+  TOKEN = j.token;
+  out.innerHTML = `注册成功！推广码：<code>${j.user.promoCode}</code> 专属链接：<code>${j.user.referralLink}</code> 余额：¥${j.user.balance}`;
+}
+async function setLink(){
+  if(!TOKEN){ out.textContent='请先注册'; return; }
+  const r = await fetch('/api/link',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+TOKEN},body:JSON.stringify({destination:dest.value})});
+  const j = await r.json();
+  out.innerHTML = `专属链接已生成：<code>${j.referralLink}</code>`;
+}
+</script>
+</body>
+</html>
