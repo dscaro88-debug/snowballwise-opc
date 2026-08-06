@@ -100,6 +100,49 @@ app.get('/api/config', (req, res) => {
   res.json({ rates: RATES, maxDepth: 2 });
 });
 
+// 管理员后台：用环境变量 ADMIN_TOKEN 保护
+function adminAuth(req, res, next) {
+  const t = req.headers['x-admin-token'] || req.query.token || '';
+  if (!process.env.ADMIN_TOKEN || t !== process.env.ADMIN_TOKEN) {
+    return res.status(401).json({ error: '管理员口令错误' });
+  }
+  next();
+}
+
+app.get('/api/admin/stats', adminAuth, (req, res) => {
+  const s = db.state;
+  const users = Object.values(s.users).map(u => {
+    const downline = Object.values(s.users).filter(x => x.upline === u.promoCode);
+    const l2 = downline.flatMap(d => Object.values(s.users).filter(x => x.upline === d.promoCode));
+    return {
+      id: u.id,
+      email: u.email,
+      promoCode: u.promoCode,
+      depth: u.depth,
+      upline: u.upline || '',
+      balance: u.balance,
+      createdAt: u.createdAt,
+      l1Count: downline.length,
+      l2Count: l2.length,
+      clicks: s.clicks.filter(c => c.promoCode === u.promoCode).length
+    };
+  }).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  res.json({
+    totalUsers: users.length,
+    totalClicks: s.clicks.length,
+    totalLedger: s.ledger.length,
+    totalOrders: s.orders.length,
+    users
+  });
+});
+
+// 原始 JSON 导出（数据备份用）
+app.get('/api/admin/export', adminAuth, (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', 'attachment; filename="snowballwise-export.json"');
+  res.send(JSON.stringify(db.state, null, 2));
+});
+
 function publicUser(u, req) {
   return {
     id: u.id, email: u.email, promoCode: u.promoCode,
