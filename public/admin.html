@@ -65,7 +65,7 @@
       <div class="stats" id="stats"></div>
       <table>
         <thead>
-          <tr><th>邮箱</th><th>推广码</th><th>层级</th><th>上级</th><th>一级</th><th>二级</th><th>点击</th><th>余额</th><th>注册时间</th></tr>
+          <tr><th>邮箱</th><th>收款方式</th><th>推广码</th><th>层级</th><th>上级</th><th>一级</th><th>二级</th><th>点击</th><th>余额</th><th>注册时间</th></tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
@@ -95,6 +95,7 @@
         document.getElementById('rows').innerHTML = data.users.length ? data.users.map(u=>`
           <tr>
             <td>${u.email}</td>
+            <td class="mono">${u.payAccount||'-'}</td>
             <td class="mono">${u.promoCode}</td>
             <td>第${u.depth}级</td>
             <td class="mono">${u.upline||'-'}</td>
@@ -103,7 +104,7 @@
             <td>${u.clicks}</td>
             <td>¥${u.balance.toFixed(2)}</td>
             <td>${fmt(u.createdAt)}</td>
-          </tr>`).join('') : '<tr><td colspan="9" class="empty">暂无注册用户</td></tr>';
+          </tr>`).join('') : '<tr><td colspan="10" class="empty">暂无注册用户</td></tr>';
       }catch(e){ document.getElementById('err').textContent='网络错误：'+e.message; }
     }
 

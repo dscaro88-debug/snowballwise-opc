@@ -24,14 +24,14 @@ function genPromoCode(email) {
   return code;
 }
 
-export function register({ email, password, referrerCode }) {
+export function register({ email, password, referralCode, payAccount }) {
   email = (email || '').trim().toLowerCase();
   if (!email || !password) throw new Error('邮箱和密码必填');
   if (Object.values(db.state.users).some(u => u.email === email)) throw new Error('邮箱已注册');
 
   let referrerId = null, depth = 0;
-  if (referrerCode) {
-    const ref = Object.values(db.state.users).find(u => u.promoCode === referrerCode);
+  if (referralCode) {
+    const ref = Object.values(db.state.users).find(u => u.promoCode === referralCode);
     if (!ref) throw new Error('推荐码不存在');
     // 两级红线：推荐人自身已达最大层级(2)时不能再推荐，否则新用户会变第 3 层
     if (ref.depth >= MAX_DEPTH) throw new Error('超过两级分销红线，无法作为推荐人');
@@ -49,6 +49,7 @@ export function register({ email, password, referrerCode }) {
     depth,
     balance: 0,
     destination: '',
+    payAccount: (payAccount || '').trim(),
     createdAt: new Date().toISOString()
   };
   db.state.users[id] = user;

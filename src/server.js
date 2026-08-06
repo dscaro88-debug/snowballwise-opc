@@ -63,6 +63,14 @@ app.get('/api/me', auth, (req, res) => {
   res.json({ user: publicUser(req.user, req) });
 });
 
+// 更新收款方式（微信/支付宝账号，CARO 据此返现）
+app.post('/api/profile', auth, (req, res) => {
+  const payAccount = (req.body.payAccount || '').trim();
+  req.user.payAccount = payAccount;
+  db.save();
+  res.json({ user: publicUser(req.user, req) });
+});
+
 app.post('/api/link', auth, (req, res) => {
   const dest = (req.body.destination || '').trim();
   if (dest) setDestination(req.user.id, dest);
@@ -126,14 +134,22 @@ function adminAuth(req, res, next) {
 app.get('/api/admin/stats', adminAuth, (req, res) => {
   const s = db.state;
   const users = Object.values(s.users).map(u => {
-    const downline = Object.values(s.users).filter(x => x.upline === u.promoCode);
-    const l2 = downline.flatMap(d => Object.values(s.users).filter(x => x.upline === d.promoCode));
+    const downline = Object.values(s.users).filter(x => {
+      const ref = x.referrerId ? s.users[x.referrerId] : null;
+      return ref && ref.promoCode === u.promoCode;
+    });
+    const l2 = downline.flatMap(d => Object.values(s.users).filter(x => {
+      const ref = x.referrerId ? s.users[x.referrerId] : null;
+      return ref && ref.promoCode === d.promoCode;
+    }));
+    const uplineUser = u.referrerId ? s.users[u.referrerId] : null;
     return {
       id: u.id,
       email: u.email,
       promoCode: u.promoCode,
       depth: u.depth,
-      upline: u.upline || '',
+      upline: uplineUser ? uplineUser.promoCode : '',
+      payAccount: u.payAccount || '',
       balance: u.balance,
       createdAt: u.createdAt,
       l1Count: downline.length,
@@ -171,7 +187,7 @@ function publicUser(u, req) {
     id: u.id, email: u.email, promoCode: u.promoCode,
     balance: u.balance, depth: u.depth,
     referralLink: `${HOST}/go/${u.promoCode}`,
-    destination: u.destination
+    destination: u.destination, payAccount: u.payAccount || ''
   };
 }
 
