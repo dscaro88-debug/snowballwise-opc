@@ -173,6 +173,15 @@ app.get('/api/admin/export', adminAuth, (req, res) => {
   res.send(JSON.stringify(db.state, null, 2));
 });
 
+// 删除用户（清理测试/违规账号用，运营后台基础能力）
+app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
+  const id = req.params.id;
+  if (!db.state.users[id]) return res.status(404).json({ error: '用户不存在' });
+  delete db.state.users[id];
+  db.save();
+  res.json({ ok: true });
+});
+
 // 管理员导入联盟订单报表（CSV：promo_code,order_amount,commission,source）
 app.post('/api/admin/orders/import', adminAuth, (req, res) => {
   try {
