@@ -10,7 +10,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-const HOST = process.env.HOST || 'http://localhost:3000';
+const HOST = process.env.HOST ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` :
+    process.env.RAILWAY_STATIC_URL ? process.env.RAILWAY_STATIC_URL :
+      'http://localhost:3000');
 
 function auth(req, res, next) {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
