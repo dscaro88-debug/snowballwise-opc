@@ -27,6 +27,16 @@ function ensure() {
     persist();
   } else if (!cache) {
     cache = JSON.parse(readFileSync(DB_FILE, 'utf8'));
+    // 兼容旧数据：补齐缺失的顶层字段
+    for (const k of Object.keys(EMPTY)) {
+      if (cache[k] === undefined) cache[k] = structuredClone(EMPTY[k]);
+    }
+    // seq 内部补齐（如 withdrawalId）
+    if (cache.seq && EMPTY.seq) {
+      for (const sk of Object.keys(EMPTY.seq)) {
+        if (cache.seq[sk] === undefined) cache.seq[sk] = EMPTY.seq[sk];
+      }
+    }
   }
   return cache;
 }
