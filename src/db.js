@@ -11,10 +11,11 @@ const DB_FILE = join(DATA_DIR, 'store.json');
 const EMPTY = {
   users: {},      // id -> user
   orders: [],     // {id, promoCode, orderAmount, commission, source, importedAt}
-  ledger: [],     // {id, userId, type, amount, orderId, note, createdAt}
+  ledger: [],     // {id, userId, type, amount, orderId, note, fromUserId, fromPromoCode, createdAt}
+  withdrawals: [],// {id, userId, email, amount, status, payAccount, createdAt, paidAt, note}
   clicks: [],     // {promoCode, ts, ip}
   sessions: {},   // token -> userId
-  seq: { userId: 0, orderId: 0, ledgerId: 0 }
+  seq: { userId: 0, orderId: 0, ledgerId: 0, withdrawalId: 0 }
 };
 
 let cache = null;

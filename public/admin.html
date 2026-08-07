@@ -46,6 +46,7 @@
         <div style="font-size:14px;font-weight:600">实时数据</div>
         <div>
           <button onclick="toggleImport()">导入订单 CSV</button>
+          <button onclick="toggleWithdraw()">提现队列</button>
           <button onclick="load()">刷新</button>
           <button onclick="exportJson()">导出备份 JSON</button>
           <button onclick="logout()">退出</button>
@@ -67,7 +68,17 @@
         <thead>
           <tr><th>邮箱</th><th>收款方式</th><th>推广码</th><th>层级</th><th>上级</th><th>一级</th><th>二级</th><th>点击</th><th>余额</th><th>注册时间</th><th>操作</th></tr>
         </thead>
-        <tbody id="rows"></tbody>
+        <tbody id="rows">        </tbody>
+      </table>
+    </div>
+
+    <div id="withdraw-box" style="display:none;background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px">提现队列（待打款 <span id="wd-pending">0</span> 笔）</div>
+      <table style="margin-top:8px">
+        <thead>
+          <tr><th>邮箱</th><th>收款方式</th><th>金额</th><th>状态</th><th>申请时间</th><th>操作</th></tr>
+        </thead>
+        <tbody id="wd-rows"></tbody>
       </table>
     </div>
   </div>
@@ -112,6 +123,50 @@
     function exportJson(){
       const t = getToken();
       window.open(API + '/api/admin/export?token=' + encodeURIComponent(t), '_blank');
+    }
+    function toggleWithdraw(){
+      const box = document.getElementById('withdraw-box');
+      const show = box.style.display === 'none';
+      box.style.display = show ? 'block' : 'none';
+      if (show) loadWithdrawals();
+    }
+    async function loadWithdrawals(){
+      const t = getToken();
+      try{
+        const r = await fetch(API + '/api/admin/withdrawals', { headers: { 'x-admin-token': t } });
+        const data = await r.json();
+        if(!r.ok){ alert('加载失败：'+(data.error||r.status)); return; }
+        document.getElementById('wd-pending').textContent = data.pendingCount;
+        document.getElementById('wd-rows').innerHTML = data.withdrawals.length ? data.withdrawals.map(w=>`
+          <tr>
+            <td>${w.email}</td>
+            <td class="mono">${w.payAccount||'-'}</td>
+            <td>¥${w.amount.toFixed(2)}</td>
+            <td>${w.status==='pending'?'待打款':w.status==='paid'?'已到账':'已驳回'}</td>
+            <td>${fmt(w.createdAt)}</td>
+            <td>${w.status==='pending'?`<button onclick="markPaid('${w.id}')" style="background:#dcfce7;color:#047857;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;margin-right:6px">标记已打款</button><button onclick="rejectW('${w.id}')" style="background:#fee2e2;color:#b91c1c;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">拒绝</button>`:'-'}</td>
+          </tr>`).join('') : '<tr><td colspan="6" class="empty">暂无提现单</td></tr>';
+      }catch(e){ alert('网络错误：'+e.message); }
+    }
+    async function markPaid(id){
+      if(!confirm('确认已打款？请先手动微信/支付宝转账给该用户。')) return;
+      const t = getToken();
+      try{
+        const r = await fetch(API + '/api/admin/withdrawals/' + id + '/paid', { method:'POST', headers:{ 'x-admin-token': t } });
+        const data = await r.json();
+        if(!r.ok){ alert('失败：'+(data.error||r.status)); return; }
+        loadWithdrawals();
+      }catch(e){ alert('网络错误：'+e.message); }
+    }
+    async function rejectW(id){
+      if(!confirm('确认拒绝该提现？金额将退回用户可提现余额。')) return;
+      const t = getToken();
+      try{
+        const r = await fetch(API + '/api/admin/withdrawals/' + id + '/reject', { method:'POST', headers:{ 'x-admin-token': t } });
+        const data = await r.json();
+        if(!r.ok){ alert('失败：'+(data.error||r.status)); return; }
+        loadWithdrawals();
+      }catch(e){ alert('网络错误：'+e.message); }
     }
     function toggleImport(){
       const box = document.getElementById('import-box');

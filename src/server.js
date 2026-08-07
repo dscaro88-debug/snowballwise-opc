@@ -6,6 +6,9 @@ import {
 } from './auth.js';
 import { importCsv, RATES } from './commission.js';
 
+// 提现阈值：余额满此金额才允许/自动生成提现单（可用环境变量覆盖）
+const WITHDRAW_THRESHOLD = Number(process.env.WITHDRAW_THRESHOLD) || 20;
+
 const app = express();
 // CORS: allow snowballwise.com + Railway 自身域名访问 API
 app.use((req, res, next) => {
@@ -182,12 +185,63 @@ app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// 推广员申请提现（手动；满阈值才可，默认提全部可提现余额）
+app.post('/api/withdraw', auth, (req, res) => {
+  try {
+    const amount = Number(req.body && req.body.amount) || req.user.balance;
+    const w = createWithdrawal(req.user.id, amount);
+    res.json({ withdrawal: w, balance: req.user.balance, pendingWithdraw: req.user.pendingWithdraw || 0 });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// 推广员查看自己的提现单 + 可提现/提现中余额
+app.get('/api/withdrawals', auth, (req, res) => {
+  const list = db.state.withdrawals.filter(w => w.userId === req.user.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  res.json({ withdrawals: list, balance: req.user.balance, pendingWithdraw: req.user.pendingWithdraw || 0, threshold: WITHDRAW_THRESHOLD });
+});
+
+// 后台：提现队列（全部状态，按时间倒序）
+app.get('/api/admin/withdrawals', adminAuth, (req, res) => {
+  const list = db.state.withdrawals.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const pendingCount = list.filter(w => w.status === 'pending').length;
+  res.json({ withdrawals: list, pendingCount });
+});
+
+// 后台：标记已打款
+app.post('/api/admin/withdrawals/:id/paid', adminAuth, (req, res) => {
+  const w = db.state.withdrawals.find(x => x.id === req.params.id);
+  if (!w) return res.status(404).json({ error: '提现单不存在' });
+  if (w.status !== 'pending') return res.status(400).json({ error: '状态不是待打款' });
+  w.status = 'paid'; w.paidAt = new Date().toISOString();
+  const u = db.state.users[w.userId];
+  if (u) u.pendingWithdraw = Number(((u.pendingWithdraw || 0) - w.amount).toFixed(2));
+  db.save();
+  res.json({ ok: true, withdrawal: w });
+});
+
+// 后台：拒绝提现（金额退回余额）
+app.post('/api/admin/withdrawals/:id/reject', adminAuth, (req, res) => {
+  const w = db.state.withdrawals.find(x => x.id === req.params.id);
+  if (!w) return res.status(404).json({ error: '提现单不存在' });
+  if (w.status !== 'pending') return res.status(400).json({ error: '状态不是待打款' });
+  w.status = 'rejected'; w.note = (req.body && req.body.note) || '';
+  const u = db.state.users[w.userId];
+  if (u) {
+    u.balance = Number((u.balance + w.amount).toFixed(2));
+    u.pendingWithdraw = Number(((u.pendingWithdraw || 0) - w.amount).toFixed(2));
+  }
+  db.save();
+  res.json({ ok: true, withdrawal: w });
+});
+
 // 管理员导入联盟订单报表（CSV：promo_code,order_amount,commission,source）
 app.post('/api/admin/orders/import', adminAuth, (req, res) => {
   try {
     const text = (req.body && req.body.csv) || '';
     const result = importCsv(text);
-    res.json({ ...result, totalOrders: db.state.orders.length });
+    const autoWithdrawals = autoWithdrawCheck();
+    res.json({ ...result, totalOrders: db.state.orders.length, autoWithdrawals });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -195,9 +249,42 @@ function publicUser(u, req) {
   return {
     id: u.id, email: u.email, promoCode: u.promoCode,
     balance: u.balance, depth: u.depth,
+    pendingWithdraw: u.pendingWithdraw || 0,
     referralLink: `${HOST}/go/${u.promoCode}`,
     destination: u.destination, payAccount: u.payAccount || ''
   };
+}
+
+// 创建提现单：校验阈值与余额，扣减可提现余额、累加提现中金额
+function createWithdrawal(userId, amount) {
+  const u = db.state.users[userId];
+  if (!u) throw new Error('用户不存在');
+  amount = Number(amount);
+  if (!(amount >= WITHDRAW_THRESHOLD)) throw new Error(`满 ${WITHDRAW_THRESHOLD} 元才可提现`);
+  if (u.balance < amount) throw new Error('可提现余额不足');
+  const id = String(db.nextId('withdrawalId'));
+  const w = {
+    id, userId, email: u.email, amount: Number(amount.toFixed(2)),
+    status: 'pending', payAccount: u.payAccount || '',
+    createdAt: new Date().toISOString(), paidAt: null, note: ''
+  };
+  db.state.withdrawals.push(w);
+  u.balance = Number((u.balance - amount).toFixed(2));
+  u.pendingWithdraw = Number(((u.pendingWithdraw || 0) + amount).toFixed(2));
+  db.save();
+  return w;
+}
+
+// 导入订单后自动检测：余额满阈值且无 pending 提现的用户，自动生成提现单
+function autoWithdrawCheck() {
+  let n = 0;
+  for (const u of Object.values(db.state.users)) {
+    if (u.balance >= WITHDRAW_THRESHOLD) {
+      const hasPending = db.state.withdrawals.some(w => w.userId === u.id && w.status === 'pending');
+      if (!hasPending) { createWithdrawal(u.id, u.balance); n++; }
+    }
+  }
+  return n;
 }
 
 const PORT = process.env.PORT || 3000;

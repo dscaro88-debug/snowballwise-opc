@@ -11,11 +11,14 @@ export const RATES = {
   PLATFORM: 0.10
 };
 
-function addLedger(userId, type, amount, orderId, note) {
+function addLedger(userId, type, amount, orderId, note, fromUserId, fromPromoCode) {
   const entry = {
     id: String(db.nextId('ledgerId')),
     userId, amount: Number(amount.toFixed(2)),
-    type, orderId, note: note || '', createdAt: new Date().toISOString()
+    type, orderId, note: note || '',
+    fromUserId: fromUserId || null,
+    fromPromoCode: fromPromoCode || null,
+    createdAt: new Date().toISOString()
   };
   db.state.ledger.push(entry);
   db.state.users[userId].balance = Number((db.state.users[userId].balance + entry.amount).toFixed(2));
@@ -36,11 +39,11 @@ export function applyOrder({ promoCode, orderAmount, commission, source }) {
 
   const entries = [];
   // 买家自购返现
-  entries.push(addLedger(buyer.id, 'rebate_self', commission * RATES.BUYER, orderId, '自购返现'));
+  entries.push(addLedger(buyer.id, 'rebate_self', commission * RATES.BUYER, orderId, '自购返现', buyer.id, buyer.promoCode));
   // 一级 / 二级
   for (const { user, level } of chain) {
     const rate = level === 1 ? RATES.L1 : RATES.L2;
-    entries.push(addLedger(user.id, `rebate_L${level}`, commission * rate, orderId, `L${level} 推荐分佣`));
+    entries.push(addLedger(user.id, `rebate_L${level}`, commission * rate, orderId, `L${level} 推荐分佣`, buyer.id, buyer.promoCode));
   }
   db.save();
   return { orderId, buyer: buyer.promoCode, entries };
